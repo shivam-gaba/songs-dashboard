@@ -1,0 +1,24 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime data written by the app (ratings are user state, not source)
+backend/app/data/ratings.json
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# The original take-home brief carries a per-candidate tracking fingerprint in
+# its filename ([58][70]...); keep it out of the public submission repo.
+TAKE_HOME*.pdf
+
+# TS incremental build info
+frontend/*.tsbuildinfo
