@@ -21,14 +21,34 @@ export function fetchSongs(
   size: number,
   sortBy: string,
   order: Order,
+  query = "",
 ): Promise<SongPage> {
-  const q = new URLSearchParams({
+  const params = new URLSearchParams({
     page: String(page),
     size: String(size),
     sort_by: sortBy,
     order,
   });
-  return req<SongPage>(`/songs?${q}`);
+  if (query.trim()) params.set("q", query.trim());
+  return req<SongPage>(`/songs?${params}`);
+}
+
+// Backend caps `size` at 100 (a DoS guard), so to load the whole dataset for
+// the chart we page through at the max size and concatenate. For very large
+// catalogs this is many round-trips — see REFLECTION.md on why full-dataset
+// loads don't scale — but it's correct and respects the API's limit.
+const MAX_PAGE_SIZE = 100;
+
+export async function fetchAllSongs(
+  sortBy = "index",
+  order: Order = "asc",
+): Promise<Song[]> {
+  const first = await fetchSongs(1, MAX_PAGE_SIZE, sortBy, order);
+  const all = [...first.items];
+  for (let p = 2; p <= first.total_pages; p++) {
+    all.push(...(await fetchSongs(p, MAX_PAGE_SIZE, sortBy, order)).items);
+  }
+  return all;
 }
 
 export function searchByTitle(title: string): Promise<SearchResult> {

@@ -37,40 +37,43 @@ will happily paper over with a plausible-but-arbitrary rule.
 - **Payoff:** the reconciliation decisions rest on facts, and it caught that the
   *only* real value conflict between the files is one danceability value.
 
-### 4. The four reconciliation decisions (I decided each)
+### 4. The reconciliation decisions (I decided each)
 The AI presented each with a recommendation and trade-offs; my calls:
 1. **Dedup by `id`; part2 wins on conflict, but only if the value is valid.**
-2. **Bad values → null + `data_quality` flag, keep the row.** (Not clamp — I
-   didn't want fabricated numbers. Not drop-row — too lossy.)
-3. **Duration unit bug → flag only, do NOT convert.** ← *This is where I
-   overruled the AI.* Its recommendation was to auto-detect and multiply by
-   1000. I overrode it: converting bakes a *guess* into the canonical table as
-   fact. Flagging keeps the table honest and pushes the ambiguity to a consumer
-   who can see the mark. The AI adjusted and implemented detection-without-
-   mutation, and made `/stats/duration` exclude the flagged rows.
-4. **Non-unique titles → title lookup always returns a list.**
+2. **Bad values → drop the value (null, shown as `—`), keep the row.** (Not
+   clamp — I didn't want fabricated numbers. Not drop-row — too lossy. And no
+   flag column — see step 5.)
+3. **Duration unit outlier → keep exactly as received, do NOT convert.** ←
+   *This is where I overruled the AI.* Its recommendation was to auto-detect and
+   multiply by 1000. I overrode it: we can't change an upstream value no matter
+   how small it looks — converting bakes a *guess* in as fact. The chart still
+   surfaces the outliers and `/stats/duration` excludes them, but the stored
+   value is untouched.
+4. **Non-unique titles → search returns all matches / filters the table.**
 
-### 5. Catching an AI mistake mid-build
-After the first normalization run, the quality flags were **wrong**: part1-only
-bad values were being labeled generic `_missing` instead of their real reason
-(a `"N/A"` energy showed as `energy_missing`, not `energy_malformed`). The AI
-noticed its own merge logic checked the empty part2 side first. It fixed the
-flag-selection so the mark names the true reason.
+### 5. Steering it back to a *user-facing* mindset
+The AI's first cut leaked its own engineering into the UI — a `data_quality`
+provenance-flag column and footer/subtitle text describing how the backend
+works. **It forgot this is a user-facing application**; a listener doesn't need
+`duration_suspect` codes. I had it strip all of that: bad values just render as
+`—`, and the internal-facing copy is gone. It had also shipped **strict
+(exact-normalized) title search** and missed **partial-word search** — searching
+"21" wouldn't surface "21 Guns" — so I had it add substring matching and make
+the search filter the table in place.
 
-- **Why I care:** the whole premise is "trust the value or see it clearly
-  marked." A *mislabeled* mark is as bad as none. This is exactly the kind of
-  subtle-but-important thing a blind paste ships.
+- **Why I care:** the difference between an engineer's debug view and a product.
+  The provenance still exists (DECISIONS.md, the raw files); it just doesn't
+  belong in a user's face.
 
 ### 6. Build the rest, tests first-class
-- API: sort-the-whole-set-then-paginate, allow-listed sort fields, ratings by
-  id with two-layer validation and atomic file persistence.
+- API: sort-the-whole-set-then-paginate, allow-listed sort fields, substring
+  title filter, ratings by id with two-layer validation and atomic persistence.
 - **My steer:** treat tests as expected, not bonus, and point them at the
   non-trivial logic the rubric names (normalization rules, sort, pagination,
-  lookup, invalid rating). Result: 49 passing tests including explicit
+  filter, lookup, invalid rating). Result: 52 passing tests including explicit
   regression guards for the two buggy-file bugs.
-- Frontend: sortable/paginated table, CSV export, list-returning title search,
-  star ratings, and a duration bar chart chosen specifically because it makes
-  the seconds-not-ms rows visually vanish.
+- Frontend: sortable/paginated table, search-as-filter, CSV export, star
+  ratings, and a duration chart that highlights the short-duration outliers.
 
 ### 7. Code review via adversarial verification
 For Section 4 I had the AI fan out multiple independent reviewers over
@@ -80,8 +83,17 @@ the ranking myself. See REVIEW.md, including a note on where the AI over-claimed
 
 ---
 
+### Where the AI got it right first try
+- The **basic UI and a working API were on point first try** — scaffolding,
+  routes, table/pagination, and the happy path came out clean.
+- What it consistently *missed* was the **edge cases**: the traps that actually
+  matter here (sort-across-the-whole-set, non-unique titles, invalid ratings,
+  the seconds-not-ms values, partial search). Those needed my steering — which
+  is exactly the split the rubric is testing for.
+
 ### Where AI cost / nearly cost me time
 - Its instinct to "helpfully" auto-convert the duration would have silently
-  corrupted the canonical data — caught at the decision gate (step 4.3).
-- The flag-mislabeling bug (step 5) — plausible output that was subtly wrong;
-  needed a human to insist the mark be *accurate*, not just present.
+  rewritten upstream data — caught at the decision gate (step 4.3).
+- It defaulted to an engineer's view (provenance flags, backend-y UI copy) and
+  to strict search — I had to steer it back to a user-facing product and insist
+  on partial-match search (step 5).

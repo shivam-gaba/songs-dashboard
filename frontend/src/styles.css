@@ -35,6 +35,22 @@ h2 { font-size: 16px; margin: 0 0 10px; }
 .muted { color: var(--muted); }
 .loading { margin-top: 8px; }
 
+/* search bar (above the table, filters it) */
+.searchbar { position: relative; max-width: 420px; margin-bottom: 16px; }
+.searchbar input {
+  width: 100%; padding: 9px 34px 9px 12px; border: 1px solid var(--line);
+  border-radius: 8px; font: inherit; background: var(--card);
+}
+.searchbar input:focus { outline: none; border-color: var(--accent); }
+.searchbar .clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  border: none; background: none; color: var(--muted); font-size: 13px;
+  padding: 4px 6px; cursor: pointer;
+}
+.searchbar .clear:hover { color: var(--ink); }
+.result-count { color: var(--muted); font-size: 13px; }
+.empty { color: var(--muted); padding: 24px 4px; }
+
 /* toolbar */
 .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .toolbar .spacer { flex: 1; }
@@ -100,6 +116,39 @@ td.suspect { color: var(--suspect); font-weight: 600; }
 .flag-inline { color: #b45309; }
 
 .chart-note { color: var(--muted); margin: 0 0 12px; max-width: 780px; }
+.chart-tooltip {
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); max-width: 240px;
+  font-size: 12px;
+}
+.chart-tooltip ul { margin: 6px 0 0; padding-left: 16px; color: var(--muted); }
+.chart-tooltip li { line-height: 1.4; }
+.chart-tooltip .more-hint { list-style: none; margin: 4px 0 0 -16px; color: var(--accent); font-weight: 600; }
+
+/* side drawer for a rating class's full song list */
+.drawer-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 50;
+}
+.drawer {
+  position: fixed; top: 0; right: 0; height: 100vh; width: min(360px, 90vw);
+  background: var(--card); border-left: 1px solid var(--line);
+  box-shadow: -8px 0 24px rgba(0,0,0,0.12); z-index: 51;
+  display: flex; flex-direction: column;
+}
+.drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid var(--line);
+}
+.drawer-head h3 { margin: 0; font-size: 15px; }
+.drawer-close {
+  border: none; background: none; font-size: 15px; color: var(--muted);
+  cursor: pointer; padding: 4px 8px;
+}
+.drawer-close:hover { color: var(--ink); }
+.drawer-list {
+  margin: 0; padding: 8px 18px 24px 36px; overflow-y: auto; flex: 1;
+}
+.drawer-list li { line-height: 1.7; }
 code { background: #f1f3f5; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 
 footer { margin-top: 28px; }

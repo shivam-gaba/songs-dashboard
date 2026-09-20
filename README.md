@@ -1,18 +1,18 @@
 # Songs Dashboard — Take-Home
 
 A small full-stack app over a messy song catalog: a Python normalization step
-reconciles two dirty JSON exports into one clean, self-describing table; a
-FastAPI backend serves it with pagination, whole-dataset sorting, title lookup,
-and persisted star ratings; a React dashboard consumes it with a sortable
-paginated table, CSV export, title search, star ratings, and a chart that
-deliberately exposes a unit bug in the data. The design principle throughout is
-**trust every value or mark it** — bad values are nulled and annotated in a
-`data_quality` column rather than silently coerced or dropped.
+reconciles two dirty JSON exports into one clean table; a FastAPI backend serves
+it with pagination, whole-dataset sorting, substring title filtering, and
+persisted star ratings; a React dashboard consumes it with a sortable paginated
+table, search-as-filter, CSV export, star ratings, and a chart that surfaces an
+outlier in the data. The design principle throughout is **every value is
+trustworthy or dropped** — bad values become `null` (shown as `—`) rather than
+being coerced to something plausible; the reasoning lives in DECISIONS.md.
 
 ## Tour of the solution
 - `backend/app/normalize.py` — Section 1. Pure reconciliation logic (dedup by
-  id, part2-wins-if-valid conflict rule, null+flag for bad values, unit-bug
-  detection). Emits `backend/app/data/songs.normalized.json`.
+  id, part2-wins-if-valid conflict rule, drop-to-null for bad values, durations
+  kept exactly as received). Emits `backend/app/data/songs.normalized.json`.
 - `backend/app/store.py` + `main.py` — Section 2. Testable query logic
   (sort/paginate/search/rate) behind a thin FastAPI layer.
 - `frontend/` — Section 3. React + Vite + Recharts dashboard.
@@ -56,15 +56,16 @@ Production build: `npm run build` (output in `frontend/dist/`).
 ```bash
 cd backend
 source .venv/bin/activate
-python -m pytest -q          # 49 tests: normalization rules, sort, pagination,
-                             # lookup, rating validation & persistence, HTTP API
+python -m pytest -q          # 52 tests: normalization rules, sort, pagination,
+                             # substring filter, lookup, rating validation &
+                             # persistence, HTTP API
 ```
 
 ## API quick reference
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/songs?page&size&sort_by&order` | sort is applied to the whole dataset, then paged |
-| GET | `/songs/search?title=` | case/spacing-insensitive; returns a list (0/1/many) |
+| GET | `/songs?page&size&sort_by&order&q` | sort/filter applied to the whole dataset, then paged; `q` is a case/spacing-insensitive **substring** title filter |
+| GET | `/songs/search?title=` | exact (normalized) title lookup; returns a list (0/1/many) |
 | GET | `/songs/id/{id}` | one song by stable id |
 | POST | `/songs/{id}/rating` | body `{"stars": 1-5}`; persisted; 422 if invalid, 404 if unknown |
 | GET | `/stats/duration` | average duration, excluding unit-suspect + missing rows |
@@ -72,9 +73,11 @@ python -m pytest -q          # 49 tests: normalization rules, sort, pagination,
 
 ## Notable data findings (see DECISIONS.md for the full log)
 - 25 unique songs after reconciling on `id` (16 + 13 − 4 overlapping).
-- **Unit bug:** 3 `duration_ms` values are actually seconds — detected and
-  flagged `duration_suspect`, *not* silently converted.
+- **Unit outlier:** 3 `duration_ms` values are actually seconds — kept exactly
+  as received (we don't alter upstream values); the chart highlights them and
+  `/stats/duration` excludes them from the average.
 - Out-of-range ratios, `tempo=0`, `"N/A"`, nulls, string-typed numbers, and a
-  dirty title are each handled by an explicit, documented rule.
+  dirty title are each handled by an explicit, documented rule (bad values are
+  dropped to `null`, shown as `—`).
 - Two different songs are both titled "Perfect" → titles are not unique, which
-  the search API and UI handle by returning all matches.
+  the search/filter handles by showing all matches.

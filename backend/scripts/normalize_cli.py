@@ -41,12 +41,19 @@ def main() -> None:
     print(f"Wrote {len(rows)} normalized rows -> {out}")
 
     if args.show:
-        flags = Counter(q for r in rows for q in r["data_quality"])
-        print("\nData-quality flags:")
-        for flag, n in sorted(flags.items(), key=lambda kv: -kv[1]):
-            print(f"  {n:2}  {flag}")
-        clean = sum(1 for r in rows if not r["data_quality"])
-        print(f"\n{clean}/{len(rows)} rows fully clean")
+        # No flag column anymore: dropped/untrustworthy values are simply null.
+        # Summarize how many nulls landed in each field so the effect is visible.
+        fields = [k for k in rows[0] if k not in ("index", "id", "title")]
+        nulls = Counter()
+        for r in rows:
+            for f in fields:
+                if r.get(f) is None:
+                    nulls[f] += 1
+        print("\nNull (dropped/missing) values per field:")
+        for f, n in sorted(nulls.items(), key=lambda kv: -kv[1]):
+            print(f"  {n:2}  {f}")
+        clean = sum(1 for r in rows if all(r.get(f) is not None for f in fields))
+        print(f"\n{clean}/{len(rows)} rows have no null fields")
 
 
 if __name__ == "__main__":

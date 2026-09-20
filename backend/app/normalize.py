@@ -3,16 +3,16 @@ Section 1 — Normalize & reconcile the two song exports into one clean,
 row-oriented table.
 
 Design goals (see DECISIONS.md for the full reasoning):
-  * A downstream consumer can trust every value OR see it clearly marked.
-    We never silently invent or overwrite data. When a value is
-    untrustworthy we set it to ``None`` and record *why* in the row's
-    ``data_quality`` list.
+  * Every value in the output is trustworthy, or it is dropped to ``None``
+    (rendered as "—" in the UI). We never invent, coerce-to-plausible, or
+    overwrite data — an out-of-range/malformed/missing value simply becomes
+    null. The absence IS the signal; there is no separate quality-flag column.
   * Reconciliation is keyed on ``id`` (the stable identifier), not title.
   * On conflict, the newer/enriched export (part2, which carries valence)
     wins — but only when its value is actually valid. Otherwise we fall
     back to the other file's valid value.
-  * The duration unit bug is *detected and flagged*, not rewritten. We
-    surface the problem rather than mutate upstream numbers.
+  * Durations are kept EXACTLY as received (never converted): we cannot
+    change an upstream value no matter how small it looks.
 
 This module is pure (no I/O). ``load_and_normalize`` at the bottom wires it
 to files for the CLI and the API.
@@ -41,7 +41,6 @@ OUTPUT_FIELDS = (
     "duration_ms",
     "num_sections",
     "num_segments",
-    "data_quality",
 )
 
 # A song shorter than this many ms is physically implausible and almost
@@ -55,7 +54,7 @@ class Cell:
     """The outcome of validating one raw value for one field."""
 
     value: Any = None
-    issue: str | None = None  # a data_quality flag, or None if clean
+    issue: str | None = None  # internal validity note (not surfaced in output)
 
 
 def _coerce_float(raw: Any) -> tuple[float | None, bool]:
@@ -106,11 +105,14 @@ def _validate_tempo(raw: Any) -> Cell:
 
 
 def _validate_duration(raw: Any) -> Cell:
-    """duration_ms. DETECT the unit bug (values in seconds) and FLAG it.
+    """duration_ms. Kept EXACTLY as received (never converted).
 
-    Per the locked decision we do NOT convert — we keep the raw number and
-    mark it ``duration_suspect`` so a downstream consumer sees exactly which
-    values it cannot trust as milliseconds.
+    We deliberately do not alter an upstream duration no matter how small it
+    is — we cannot know the true value, so we surface what we were given. Only
+    a genuinely unusable value (non-numeric or <= 0) is dropped to null.
+    Implausibly-short values (the seconds-not-ms rows) are kept as-is; the
+    dashboard chart flags them visually by magnitude, the table shows them
+    formatted.
     """
     if raw is None:
         return Cell(None, "duration_missing")
@@ -119,12 +121,16 @@ def _validate_duration(raw: Any) -> Cell:
         return Cell(None, "duration_malformed")
     if val <= 0:
         return Cell(None, "duration_invalid")
-    ival = int(round(val))
-    if ival < DURATION_SUSPECT_MS:
-        # Implausibly short => almost certainly seconds, not ms. Keep raw,
-        # flag it. (e.g. 158 -> 2:38 if interpreted as seconds.)
-        return Cell(ival, "duration_suspect")
-    return Cell(ival, None)
+    return Cell(int(round(val)), None)
+
+
+def is_suspect_duration(ms: Any) -> bool:
+    """True if a duration is implausibly short (recorded in seconds, not ms).
+
+    Used only for visualization/stats (chart highlight, honest average) — the
+    stored value itself is never changed.
+    """
+    return isinstance(ms, (int, float)) and 0 < ms < DURATION_SUSPECT_MS
 
 
 def _validate_mood(raw: Any) -> Cell:
@@ -256,22 +262,17 @@ def normalize(
         """primary = part2 row (or None), fallback = part1 row (or None)."""
         p = primary or {}
         f = fallback or {}
-        quality: list[str] = []
 
         # Title: prefer part1's (part1 is the original catalog naming), fall
         # back to part2. Whichever we take, clean whitespace.
         raw_title = f.get("title") if f.get("title") is not None else p.get("title")
-        title, t_issue = _clean_title(raw_title)
-        if t_issue:
-            quality.append(t_issue)
+        title, _ = _clean_title(raw_title)
 
+        # Every field is either a trustworthy value or dropped to None (which
+        # the UI renders as "—"). No quality flags: an absent value IS the mark.
         out: dict[str, Any] = {"id": row_id, "title": title}
         for name in _MERGE_FIELDS:
-            cell = _pick(name, p.get(name), f.get(name))
-            out[name] = cell.value
-            if cell.issue:
-                quality.append(cell.issue)
-        out["data_quality"] = quality
+            out[name] = _pick(name, p.get(name), f.get(name)).value
         return out
 
     # 1) Every part1 row, reconciled against its part2 twin (if any).

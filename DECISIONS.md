@@ -1,10 +1,12 @@
 # DECISIONS.md
 
 Decisions I made, with the trade-off I accepted for each. The guiding
-principle for Section 1: **a downstream consumer must be able to trust every
-value in the table, or see it clearly marked.** I never silently invent or
-overwrite data — when a value can't be trusted I set it to `null` and record
-*why* in a per-row `data_quality` list.
+principle for Section 1: **every value in the table is trustworthy, or it is
+dropped.** I never invent, coerce-to-plausible, or overwrite data — when a
+value can't be trusted I set it to `null`, which the dashboard renders as `—`.
+There is no separate quality-flag column: for a user-facing app the absence of
+a value is itself the mark, and showing internal provenance codes would be
+noise.
 
 ---
 
@@ -26,7 +28,7 @@ Running [`backend/scripts/normalize_cli.py --print`](backend/scripts/normalize_c
 | dirty title (`" 4 walls  "` — leading/trailing/inner whitespace) | row 1 | 1 |
 | duplicate title, *different* songs (two "Perfect") | part2 | 1 pair |
 
-Result: **25 unique songs**, 9 fully clean.
+Result: **25 unique songs**; 12/25 rows have no null fields.
 
 ### Decision: dedup by `id`, not title
 - **Why:** `id` is the stable Spotify-style identifier. Titles are dirty
@@ -47,60 +49,55 @@ Result: **25 unique songs**, 9 fully clean.
   seconds-not-ms bug and a negative acousticness). Blindly preferring it would
   let a bad part2 value overwrite a good part1 one. So the rule is: take
   part2's value if it passes validation; else fall back to part1's valid value;
-  else `null` + flag. Best of both, and defensible per-field.
+  else `null`. Best of both, and defensible per-field.
 - **Trade-off:** slightly more complex than "newest wins," but it never
   discards a good number for a bad one.
 
-### Decision: bad values → **null the value + flag, keep the row** (never drop rows, never clamp)
+### Decision: bad values → **drop the value (null → `—`), keep the row** (never clamp, never drop rows)
 - **Coerce** clean type errors silently: `"0.521"` → `0.521`. That's a
-  formatting difference, not a data problem — no flag.
-- **Null + flag** anything out of range / invalid / malformed / missing:
-  `danceability_out_of_range`, `tempo_invalid`, `energy_malformed`,
-  `acousticness_missing`, etc. The row stays; its other (good) attributes
-  remain usable.
+  formatting difference, not a data problem.
+- **Drop to `null`** anything out of range / invalid / malformed / missing
+  (e.g. `danceability = 1.42`, `tempo = 0`, `energy = "N/A"`, absent keys). The
+  value shows as `—`; the row stays and its other (good) attributes remain
+  usable. The merge (`_pick`) still prefers whichever source has a *valid*
+  value before falling back to null, so we only drop when neither file offers a
+  usable number.
+- **Why drop rather than flag?** This is a user-facing app. A listener doesn't
+  need provenance codes; a blank cell already communicates "not available."
+  Provenance stays discoverable in this doc and the raw source files.
 - **Why not clamp** (1.42 → 1.0)? Clamping fabricates a plausible-looking value
-  and hides the upstream problem. A null the consumer can see beats a lie it
-  can't.
+  and hides the upstream problem. A blank the user can see beats a lie it can't.
 - **Why not drop the row?** Too lossy — we'd lose ~5 of 25 songs over a single
   bad field while the rest of each row is fine.
-- **Trade-off:** consumers must handle `null`s. That's the honest cost of not
-  fabricating data, and the `data_quality` list makes the nulls self-describing.
-- **Flag accuracy matters:** an early version of the merge reported a generic
-  `_missing` flag for part1-only bad values (because part2's empty side is
-  checked first). I fixed `_pick` so the flag names the *real* reason
-  (`energy_malformed`, not `energy_missing`) — a mislabeled mark is as bad as no
-  mark. See [`normalize.py` `_pick`](backend/app/normalize.py).
+- **Trade-off:** consumers must handle `null`s, and the *reason* a value is
+  missing is no longer machine-readable per-row (it lives in this doc instead).
 
-### Decision: the units bug (`duration_ms`) → **detect and flag, do NOT convert**
+### Decision: the units bug (`duration_ms`) → **keep exactly as received (no convert, no flag)**
 - **Detection:** any `duration_ms` below 10,000 (10 seconds) is physically
-  impossible for a song, so it was almost certainly recorded in **seconds**.
-  Three rows trip this (158, 270, 356 → 2:38, 4:30, 5:56 as seconds — all
-  plausible track lengths).
-- **What I store:** the raw value, marked `duration_suspect`. I deliberately do
-  **not** auto-multiply by 1000.
-- **Why not convert?** Converting *guesses* the upstream intent and bakes that
-  guess into the canonical table as if it were fact. "Flag, don't convert"
-  keeps the table honest: the value is clearly marked as untrustworthy-as-ms,
-  and the fix (and the choice of whether 158 is really seconds) is left to a
-  consumer who can see the flag. This still satisfies "trust every value **or
-  see it clearly marked**." The API's `/stats/duration` demonstrates the payoff
-  — it *excludes* suspect rows from the average instead of averaging garbage.
-- **Trade-off:** consumers wanting a clean duration must apply the conversion
-  themselves using the flag. Given the ambiguity, surfacing beats silently
-  rewriting. *(This was a deliberate override of the "auto-convert" option — I
-  chose transparency over convenience.)*
+  implausible for a song — recorded in seconds, not ms. Three rows trip this
+  (158, 270, 356 → 2:38, 4:30, 5:56 as seconds).
+- **What I store:** the raw value, unchanged. I do **not** convert it and I do
+  **not** flag it in the data.
+- **Why not convert?** We cannot change an upstream value no matter how small it
+  looks — converting *guesses* the true value and bakes that guess in as fact.
+  We surface exactly what we were given.
+- **Where the quirk still shows:** detection-by-magnitude is used only for
+  presentation, never to alter data — the dashboard chart highlights the short
+  outliers, and `/stats/duration` excludes them from the average so a summary
+  stat isn't skewed by values in the wrong unit.
+- **Trade-off:** the table shows a few very short durations (e.g. `00:00:158`).
+  That's the honest state of the upstream data; we don't paper over it.
 
 ### Decision: `valence` (the extra attribute) → keep it, null for part1-only rows
 - Dropping a real audio feature to make the schema symmetric would throw away
-  good data. It's a first-class column; part1-only rows get `valence: null` +
-  `valence_missing`.
+  good data. It's a first-class column; part1-only rows get `valence: null`
+  (shown as `—`).
 
 ### Decision: `title` cleaning → trim + collapse whitespace, **preserve casing & diacritics**
 - Whitespace is noise (`" 4 walls  "` → `"4 walls"`). Casing and diacritics are
-  meaning ("Naïve", "God's Plan") and are kept for display. Cleaned titles get a
-  `title_cleaned` flag. Matching is done on a normalized key (casefold + collapse
-  spaces) at query time, so lookups are case/spacing-insensitive without
-  mangling the stored title.
+  meaning ("Naïve", "God's Plan") and are kept for display. Matching is done on a
+  normalized key (casefold + collapse spaces) at query time, so lookups are
+  case/spacing-insensitive without mangling the stored title.
 
 ### Kept as-is (documented non-issues)
 - `mood` is a 0/1 category in both files (likely major/minor key); consistent,
@@ -131,14 +128,33 @@ Result: **25 unique songs**, 9 fully clean.
   Fine for 25 rows; for a large table I'd sort in the DB with an index (noted in
   REFLECTION).
 
-### Non-unique titles → return a list, always
-- `GET /songs/search` returns `{query, count, matches[]}` — 0, 1, or many.
-  A single-object contract can't represent "two Perfects," and forcing the
-  client to guess is worse than handing it the array. The frontend renders "no
-  match" and "N matches" from `count`.
-- Lookup is **case- and spacing-insensitive** (`_normalize_title` = casefold +
-  collapse whitespace) but **not fuzzy/spelling-tolerant** — I'd rather return
-  nothing than a wrong song. Trade-off: a typo yields no match.
+### Search-as-filter (dashboard UX)
+- The dashboard's search box filters the table in place via a `q` **substring**
+  filter on `GET /songs` (case/spacing-insensitive), so filtering, sorting, and
+  pagination all operate on the same server-side result set. Typing "21" matches
+  both "21" and "21 Guns". The exact-match `GET /songs/search` endpoint remains
+  for the precise API contract.
+- **Trade-off:** substring matching is more forgiving (good for humans) but can
+  return broad results; the exact endpoint stays available when precision
+  matters.
+
+### Presentation choices (user-facing dashboard)
+- Rows are displayed **1-based** (`index + 1`) for readability; the stable
+  0-based `index` is unchanged in the data/API.
+- Duration is shown as **`MM:SS:MS`** (e.g. `03:45:947`) rather than raw ms.
+- **No data-quality flags column** in the UI — dropped/missing values simply
+  render as `—`. Durations are shown exactly as received (a short one reads as
+  e.g. `00:00:158`); the *chart* highlights those outliers by magnitude, but the
+  table never editorializes.
+
+### Non-unique titles → search returns all matches; table filters in place
+- The dashboard search box **filters the table** to every match (0, 1, or many),
+  case/spacing-insensitively and by substring (see Search-as-filter above), so
+  "no match" is an empty table and "many" is several rows — both handled without
+  a special contract.
+- The `GET /songs/search` endpoint remains for exact-match API use and returns
+  `{query, count, matches[]}`; a single-object contract couldn't represent "two
+  Perfects."
 
 ### Rate by `id`, not title; validate; persist to a file
 - Ratings key on `id` because titles aren't unique — rating "Perfect" by title
@@ -159,10 +175,10 @@ Result: **25 unique songs**, 9 fully clean.
 ## What I deliberately left out (and would do with more time)
 - **DB layer.** Data lives in a normalized JSON file loaded into memory. For 25
   rows this is right; production wants SQLite/Postgres with indexes for sort.
-- **Fuzzy title search.** Exact-normalized only. Would add trigram/`ILIKE`
-  matching with a ranked result list.
+- **Fuzzy title search.** Substring + case/spacing-insensitive, but not
+  spelling-tolerant. Would add trigram/`ILIKE` matching with ranked results.
 - **Auth / rate-limiting / per-user ratings.** Ratings are global and anonymous.
-- **Frontend tests.** Backend has 49 tests; the React app is manually verified.
+- **Frontend tests.** Backend has 52 tests; the React app is manually verified.
   Given the time budget I put test effort where the graded "non-trivial logic"
   lives (normalization, sort, pagination, lookup, rating).
 - **Pinning exact upstream provenance** (which file each surviving value came

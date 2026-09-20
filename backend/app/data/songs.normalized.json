@@ -11,10 +11,7 @@
     "valence": null,
     "duration_ms": 225947,
     "num_sections": 8,
-    "num_segments": 830,
-    "data_quality": [
-      "valence_missing"
-    ]
+    "num_segments": 830
   },
   {
     "index": 1,
@@ -28,11 +25,7 @@
     "valence": null,
     "duration_ms": 207477,
     "num_sections": 7,
-    "num_segments": 999,
-    "data_quality": [
-      "title_cleaned",
-      "valence_missing"
-    ]
+    "num_segments": 999
   },
   {
     "index": 2,
@@ -46,11 +39,7 @@
     "valence": null,
     "duration_ms": 243333,
     "num_sections": 9,
-    "num_segments": 712,
-    "data_quality": [
-      "energy_missing",
-      "valence_missing"
-    ]
+    "num_segments": 712
   },
   {
     "index": 3,
@@ -64,11 +53,7 @@
     "valence": null,
     "duration_ms": 328400,
     "num_sections": 11,
-    "num_segments": 1204,
-    "data_quality": [
-      "danceability_out_of_range",
-      "valence_missing"
-    ]
+    "num_segments": 1204
   },
   {
     "index": 4,
@@ -82,10 +67,7 @@
     "valence": null,
     "duration_ms": 198760,
     "num_sections": 6,
-    "num_segments": 640,
-    "data_quality": [
-      "valence_missing"
-    ]
+    "num_segments": 640
   },
   {
     "index": 5,
@@ -99,10 +81,7 @@
     "valence": null,
     "duration_ms": 295893,
     "num_sections": 10,
-    "num_segments": 981,
-    "data_quality": [
-      "valence_missing"
-    ]
+    "num_segments": 981
   },
   {
     "index": 6,
@@ -116,11 +95,7 @@
     "valence": null,
     "duration_ms": 354320,
     "num_sections": 14,
-    "num_segments": 1560,
-    "data_quality": [
-      "acousticness_missing",
-      "valence_missing"
-    ]
+    "num_segments": 1560
   },
   {
     "index": 7,
@@ -134,10 +109,7 @@
     "valence": null,
     "duration_ms": 222586,
     "num_sections": 9,
-    "num_segments": 862,
-    "data_quality": [
-      "valence_missing"
-    ]
+    "num_segments": 862
   },
   {
     "index": 8,
@@ -151,11 +123,7 @@
     "valence": null,
     "duration_ms": 200040,
     "num_sections": 8,
-    "num_segments": 733,
-    "data_quality": [
-      "tempo_invalid",
-      "valence_missing"
-    ]
+    "num_segments": 733
   },
   {
     "index": 9,
@@ -169,10 +137,7 @@
     "valence": null,
     "duration_ms": 228200,
     "num_sections": 9,
-    "num_segments": 902,
-    "data_quality": [
-      "valence_missing"
-    ]
+    "num_segments": 902
   },
   {
     "index": 10,
@@ -186,11 +151,7 @@
     "valence": null,
     "duration_ms": 125666,
     "num_sections": 5,
-    "num_segments": 380,
-    "data_quality": [
-      "energy_malformed",
-      "valence_missing"
-    ]
+    "num_segments": 380
   },
   {
     "index": 11,
@@ -204,10 +165,7 @@
     "valence": null,
     "duration_ms": 401200,
     "num_sections": 12,
-    "num_segments": 1420,
-    "data_quality": [
-      "valence_missing"
-    ]
+    "num_segments": 1420
   },
   {
     "index": 12,
@@ -221,8 +179,7 @@
     "valence": 0.31,
     "duration_ms": 215000,
     "num_sections": 8,
-    "num_segments": 760,
-    "data_quality": []
+    "num_segments": 760
   },
   {
     "index": 13,
@@ -236,8 +193,7 @@
     "valence": 0.44,
     "duration_ms": 213573,
     "num_sections": 8,
-    "num_segments": 812,
-    "data_quality": []
+    "num_segments": 812
   },
   {
     "index": 14,
@@ -251,8 +207,7 @@
     "valence": 0.22,
     "duration_ms": 198973,
     "num_sections": 7,
-    "num_segments": 690,
-    "data_quality": []
+    "num_segments": 690
   },
   {
     "index": 15,
@@ -266,8 +221,7 @@
     "valence": 0.55,
     "duration_ms": 233713,
     "num_sections": 8,
-    "num_segments": 803,
-    "data_quality": []
+    "num_segments": 803
   },
   {
     "index": 16,
@@ -281,8 +235,7 @@
     "valence": 0.61,
     "duration_ms": 263400,
     "num_sections": 9,
-    "num_segments": 940,
-    "data_quality": []
+    "num_segments": 940
   },
   {
     "index": 17,
@@ -296,10 +249,7 @@
     "valence": 0.73,
     "duration_ms": 158,
     "num_sections": 6,
-    "num_segments": 560,
-    "data_quality": [
-      "duration_suspect"
-    ]
+    "num_segments": 560
   },
   {
     "index": 18,
@@ -313,8 +263,7 @@
     "valence": 0.29,
     "duration_ms": 293826,
     "num_sections": 10,
-    "num_segments": 1180,
-    "data_quality": []
+    "num_segments": 1180
   },
   {
     "index": 19,
@@ -328,10 +277,7 @@
     "valence": 0.66,
     "duration_ms": 238746,
     "num_sections": 9,
-    "num_segments": 951,
-    "data_quality": [
-      "acousticness_out_of_range"
-    ]
+    "num_segments": 951
   },
   {
     "index": 20,
@@ -345,8 +291,7 @@
     "valence": 0.48,
     "duration_ms": 242373,
     "num_sections": 8,
-    "num_segments": 889,
-    "data_quality": []
+    "num_segments": 889
   },
   {
     "index": 21,
@@ -360,10 +305,7 @@
     "valence": 0.52,
     "duration_ms": 270,
     "num_sections": 9,
-    "num_segments": 1010,
-    "data_quality": [
-      "duration_suspect"
-    ]
+    "num_segments": 1010
   },
   {
     "index": 22,
@@ -377,8 +319,7 @@
     "valence": 0.39,
     "duration_ms": 320357,
     "num_sections": 11,
-    "num_segments": 1290,
-    "data_quality": []
+    "num_segments": 1290
   },
   {
     "index": 23,
@@ -392,10 +333,7 @@
     "valence": 0.71,
     "duration_ms": 356,
     "num_sections": 13,
-    "num_segments": 1490,
-    "data_quality": [
-      "duration_suspect"
-    ]
+    "num_segments": 1490
   },
   {
     "index": 24,
@@ -409,7 +347,6 @@
     "valence": 0.6,
     "duration_ms": 264000,
     "num_sections": 9,
-    "num_segments": 944,
-    "data_quality": []
+    "num_segments": 944
   }
 ]

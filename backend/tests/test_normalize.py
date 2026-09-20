@@ -36,11 +36,11 @@ def test_non_numeric_string_is_malformed():
     assert cell.value is None and cell.issue == "energy_malformed"
 
 
-def test_short_duration_is_kept_raw_but_flagged_suspect():
-    # Decision: DETECT the unit bug, do NOT convert. Value stays as-is.
+def test_short_duration_is_kept_exactly_as_received():
+    # Decision: never alter an upstream duration, no matter how small.
     cell = validate_field("duration_ms", 158)
-    assert cell.value == 158 and cell.issue == "duration_suspect"
-    assert 158 < DURATION_SUSPECT_MS
+    assert cell.value == 158 and cell.issue is None
+    assert 158 < DURATION_SUSPECT_MS  # still detectable as an outlier for viz
 
 
 def test_normal_duration_has_no_flag():
@@ -77,23 +77,22 @@ def test_falls_back_to_part1_when_part2_value_invalid():
     assert rows[0]["energy"] == 0.5
 
 
-def test_flag_reports_the_informative_reason_not_generic_missing():
-    # part1-only bad value must be flagged for its REAL reason.
+def test_bad_value_is_dropped_to_none_no_flag_column():
+    # A malformed value becomes null; there is no data_quality column at all.
     p1 = {"id": {"0": "X"}, "title": {"0": "S"}, "energy": {"0": "N/A"}}
     p2 = {"id": {}, "title": {}}
     rows = normalize(p1, p2)
-    assert "energy_malformed" in rows[0]["data_quality"]
-    assert "energy_missing" not in rows[0]["data_quality"]
+    assert rows[0]["energy"] is None
+    assert "data_quality" not in rows[0]
 
 
-def test_valence_only_in_part2_is_carried_and_missing_flagged_for_others():
+def test_valence_only_in_part2_is_carried_else_null():
     p1 = {"id": {"0": "A", "1": "B"}, "title": {"0": "A", "1": "B"}}
     p2 = {"id": {"0": "A"}, "title": {"0": "A"}, "valence": {"0": 0.3}}
     rows = normalize(p1, p2)
     by_id = {r["id"]: r for r in rows}
     assert by_id["A"]["valence"] == 0.3
-    assert by_id["B"]["valence"] is None
-    assert "valence_missing" in by_id["B"]["data_quality"]
+    assert by_id["B"]["valence"] is None  # dropped -> "—" in the UI
 
 
 def test_title_whitespace_cleaned_casing_preserved():
@@ -101,7 +100,6 @@ def test_title_whitespace_cleaned_casing_preserved():
     p2 = {"id": {}, "title": {}}
     rows = normalize(p1, p2)
     assert rows[0]["title"] == "Naive Song"
-    assert "title_cleaned" in rows[0]["data_quality"]
 
 
 def test_indices_are_contiguous_from_zero():

@@ -11,7 +11,6 @@ export interface Song {
   duration_ms: number | null;
   num_sections: number | null;
   num_segments: number | null;
-  data_quality: string[];
   rating: number | null;
 }
 
@@ -43,5 +42,15 @@ export const COLUMNS: { key: keyof Song; label: string; numeric: boolean }[] = [
   { key: "mood", label: "Mood", numeric: true },
   { key: "acousticness", label: "Acoustic", numeric: true },
   { key: "tempo", label: "Tempo", numeric: true },
-  { key: "duration_ms", label: "Duration (ms)", numeric: true },
+  { key: "duration_ms", label: "Duration", numeric: true },
 ];
+
+/** Format a duration in ms as MM:SS:MS (e.g. 225947 -> "03:45:947"). */
+export function formatDuration(ms: number | null): string {
+  if (ms === null) return "—";
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  const millis = Math.round(ms % 1000);
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${p2(minutes)}:${p2(seconds)}:${String(millis).padStart(3, "0")}`;
+}

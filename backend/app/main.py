@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .models import DurationStats, RatingIn, SearchResult, Song, SongPage
+from .normalize import is_suspect_duration
 from .store import SORTABLE_FIELDS, build_repository
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -58,20 +59,24 @@ def list_songs(
     size: int = Query(10, ge=1, le=MAX_PAGE_SIZE),
     sort_by: str = Query("index"),
     order: str = Query("asc", pattern="^(asc|desc)$"),
+    q: str | None = Query(None, description="case/spacing-insensitive substring title filter"),
 ) -> SongPage:
     """Return a page of songs, sorted across the WHOLE dataset first.
 
-    Order of operations matters: we sort the full set, THEN slice the page.
-    (The reviewed buggy_api.py sliced first and sorted only the page.)
+    Order of operations matters: filter (if q) -> sort the full (filtered) set
+    -> THEN slice the page. So sorting and paging stay correct across the whole
+    result, not just one page. (The reviewed buggy_api.py sliced first and
+    sorted only the page.)
     """
     if sort_by not in SORTABLE_FIELDS:
         raise HTTPException(
             status_code=400,
             detail=f"sort_by must be one of {sorted(SORTABLE_FIELDS)}",
         )
-    ordered = repo.sorted(repo.all(), sort_by, order)
+    base = repo.filter_by_title(q) if q else repo.all()
+    ordered = repo.sorted(base, sort_by, order)
     items = repo.paginate(ordered, page, size)
-    total = repo.total
+    total = len(base)
     total_pages = (total + size - 1) // size if total else 0
     return SongPage(
         items=items,
@@ -123,16 +128,14 @@ def duration_stats() -> DurationStats:
     recorded in seconds, not ms). Averaging those in — as the buggy file does
     — silently corrupts the result.
     """
+    songs = repo.all()
     durations = [
         s["duration_ms"]
-        for s in repo.all()
-        if s["duration_ms"] is not None
-        and "duration_suspect" not in s["data_quality"]
+        for s in songs
+        if s["duration_ms"] is not None and not is_suspect_duration(s["duration_ms"])
     ]
-    excluded_suspect = sum(
-        1 for s in repo.all() if "duration_suspect" in s["data_quality"]
-    )
-    excluded_missing = sum(1 for s in repo.all() if s["duration_ms"] is None)
+    excluded_suspect = sum(1 for s in songs if is_suspect_duration(s["duration_ms"]))
+    excluded_missing = sum(1 for s in songs if s["duration_ms"] is None)
     avg = (sum(durations) / len(durations) / 1000) if durations else None
     return DurationStats(
         avg_seconds=avg,

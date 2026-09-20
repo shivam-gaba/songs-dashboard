@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchSongs, rateSong } from "./api";
+import { fetchAllSongs, fetchSongs, rateSong } from "./api";
 import type { Order, Song, SongPage } from "./types";
 import { SongTable } from "./components/SongTable";
-import { TitleSearch } from "./components/TitleSearch";
-import { DurationChart } from "./components/DurationChart";
+import { RatingChart } from "./components/RatingChart";
 import { downloadCsv, songsToCsv } from "./csv";
 
 const PAGE_SIZE = 10;
@@ -12,33 +11,44 @@ export default function App() {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState("index");
   const [order, setOrder] = useState<Order>("asc");
+  const [search, setSearch] = useState(""); // raw input
+  const [query, setQuery] = useState(""); // debounced, applied filter
   const [data, setData] = useState<SongPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ratingBusy, setRatingBusy] = useState<string | null>(null);
   const [allSongs, setAllSongs] = useState<Song[]>([]);
 
+  // Debounce the search box by 1s so we don't fire an API call on every
+  // keystroke; applying a new filter restarts at page 1.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchSongs(page, PAGE_SIZE, sortBy, order);
-      setData(res);
+      setData(await fetchSongs(page, PAGE_SIZE, sortBy, order, query));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [page, sortBy, order]);
+  }, [page, sortBy, order, query]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Fetch the whole dataset once for the chart (independent of paging/sort).
+  // Load the whole dataset once for the chart (paged under the API's size cap).
   useEffect(() => {
-    fetchSongs(1, 1000, "index", "asc")
-      .then((r) => setAllSongs(r.items))
+    fetchAllSongs()
+      .then(setAllSongs)
       .catch(() => setAllSongs([]));
   }, []);
 
@@ -56,7 +66,6 @@ export default function App() {
     setRatingBusy(song.id);
     try {
       const updated = await rateSong(song.id, stars);
-      // Reflect the new rating in both the current page and the chart set.
       setData((d) =>
         d
           ? { ...d, items: d.items.map((s) => (s.id === song.id ? updated : s)) }
@@ -76,19 +85,32 @@ export default function App() {
   }
 
   const totalPages = data?.total_pages ?? 0;
+  const isFiltering = query.length > 0;
+  const noResults = !!data && data.total === 0;
 
   return (
     <div className="app">
       <header>
         <h1>🎵 Songs Dashboard</h1>
-        <p className="sub">
-          {data ? `${data.total} songs` : "…"} · normalized &amp; reconciled from
-          two upstream exports · sorting &amp; paging happen on the server across
-          the full dataset
-        </p>
+        <p className="sub">{data ? `${data.total} songs` : "…"}</p>
       </header>
 
       {error && <div className="banner error">Error: {error}</div>}
+
+      {/* Search sits above the table and filters it (partial, case/space-insensitive). */}
+      <div className="searchbar">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by title… (e.g. 21, perfect)"
+          aria-label="search songs by title"
+        />
+        {search && (
+          <button className="clear" onClick={() => setSearch("")} aria-label="clear search">
+            ✕
+          </button>
+        )}
+      </div>
 
       <section className="table-section">
         <div className="toolbar">
@@ -97,22 +119,27 @@ export default function App() {
               ← Prev
             </button>
             <span>
-              Page {data?.page ?? page} / {totalPages || "…"}
+              Page {noResults ? 0 : data?.page ?? page} / {totalPages}
             </span>
             <button
-              disabled={loading || (totalPages > 0 && page >= totalPages)}
+              disabled={loading || totalPages === 0 || page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
               Next →
             </button>
           </div>
+          {isFiltering && data && (
+            <span className="result-count">
+              {data.total} result{data.total === 1 ? "" : "s"} for “{query}”
+            </span>
+          )}
           <div className="spacer" />
-          <button className="csv" disabled={!data} onClick={onDownloadCsv}>
+          <button className="csv" disabled={!data || noResults} onClick={onDownloadCsv}>
             ⬇ Download page as CSV
           </button>
         </div>
 
-        {data && (
+        {data && !noResults && (
           <SongTable
             songs={data.items}
             sortBy={sortBy}
@@ -122,20 +149,16 @@ export default function App() {
             ratingBusy={ratingBusy}
           />
         )}
+        {noResults && (
+          <p className="empty">
+            No songs match “{query}”. Search ignores case and spacing and matches
+            any part of the title.
+          </p>
+        )}
         {loading && <p className="muted loading">Loading…</p>}
       </section>
 
-      <TitleSearch />
-
-      {allSongs.length > 0 && <DurationChart songs={allSongs} />}
-
-      <footer>
-        <p className="muted">
-          Flags column shows per-value data-quality provenance (e.g.{" "}
-          <code>duration_suspect</code>, <code>energy_malformed</code>). See
-          DECISIONS.md for the reconciliation rules.
-        </p>
-      </footer>
+      {allSongs.length > 0 && <RatingChart songs={allSongs} />}
     </div>
   );
 }

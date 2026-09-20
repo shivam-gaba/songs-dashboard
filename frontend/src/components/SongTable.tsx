@@ -1,5 +1,5 @@
 import type { Order, Song } from "../types";
-import { COLUMNS } from "../types";
+import { COLUMNS, formatDuration } from "../types";
 import { StarRating } from "./StarRating";
 
 interface Props {
@@ -43,14 +43,25 @@ export function SongTable({
                 </th>
               );
             })}
-            <th>Rating</th>
-            <th>Flags</th>
+            <th
+              className="sortable"
+              onClick={() => onSort("rating")}
+              aria-sort={
+                sortBy === "rating" ? (order === "asc" ? "ascending" : "descending") : "none"
+              }
+              title="Click to sort by rating (whole dataset)"
+            >
+              Rating
+              <span className="arrow">
+                {sortBy === "rating" ? (order === "asc" ? " ▲" : " ▼") : ""}
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {songs.map((s) => (
             <tr key={s.id}>
-              <td className="num">{s.index}</td>
+              <td className="num">{s.index + 1}</td>
               <td>{s.title ?? <em className="muted">untitled</em>}</td>
               <td className="num">{fmt(s.danceability)}</td>
               <td className="num">{fmt(s.energy)}</td>
@@ -58,26 +69,13 @@ export function SongTable({
               <td className="num">{s.mood === null ? "—" : s.mood}</td>
               <td className="num">{fmt(s.acousticness, 4)}</td>
               <td className="num">{fmt(s.tempo)}</td>
-              <td className={"num" + (s.data_quality.includes("duration_suspect") ? " suspect" : "")}>
-                {fmt(s.duration_ms)}
-              </td>
+              <td className="num">{formatDuration(s.duration_ms)}</td>
               <td>
                 <StarRating
                   value={s.rating}
                   disabled={ratingBusy === s.id}
                   onRate={(stars) => onRate(s, stars)}
                 />
-              </td>
-              <td className="flags">
-                {s.data_quality.length === 0 ? (
-                  <span className="ok">clean</span>
-                ) : (
-                  s.data_quality.map((f) => (
-                    <span key={f} className="flag" title={f}>
-                      {f}
-                    </span>
-                  ))
-                )}
               </td>
             </tr>
           ))}

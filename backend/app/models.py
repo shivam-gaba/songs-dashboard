@@ -17,8 +17,6 @@ class Song(BaseModel):
     duration_ms: int | None = None
     num_sections: int | None = None
     num_segments: int | None = None
-    # Per-row provenance: which values are missing/suspect and why.
-    data_quality: list[str] = Field(default_factory=list)
     # Current user star rating (1-5), or null if unrated.
     rating: int | None = None
 

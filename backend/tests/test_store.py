@@ -15,8 +15,7 @@ def _repo(songs, tmp_path):
 def _songs(*vals):
     """Build minimal song dicts with a tempo value and required keys."""
     return [
-        {"index": i, "id": f"id{i}", "title": f"t{i}",
-         "tempo": v, "data_quality": []}
+        {"index": i, "id": f"id{i}", "title": f"t{i}", "tempo": v}
         for i, v in enumerate(vals)
     ]
 
@@ -51,8 +50,8 @@ def test_nulls_sort_last_descending(tmp_path):
 
 def test_title_sort_is_case_insensitive(tmp_path):
     songs = [
-        {"index": 0, "id": "a", "title": "banana", "data_quality": []},
-        {"index": 1, "id": "b", "title": "Apple", "data_quality": []},
+        {"index": 0, "id": "a", "title": "banana"},
+        {"index": 1, "id": "b", "title": "Apple"},
     ]
     r = _repo(songs, tmp_path)
     out = r.sorted(r.all(), "title", "asc")
@@ -61,7 +60,7 @@ def test_title_sort_is_case_insensitive(tmp_path):
 
 def test_unknown_sort_field_raises(repo):
     with pytest.raises(ValueError):
-        repo.sorted(repo.all(), "data_quality", "asc")
+        repo.sorted(repo.all(), "not_a_field", "asc")
     with pytest.raises(ValueError):
         repo.sorted(repo.all(), "; DROP TABLE", "asc")
 

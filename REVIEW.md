@@ -87,31 +87,35 @@ alone is a merge-blocker.)*
   two stores drift.
 - **Fix:** one persistence layer (DB, or an atomically-written file), keyed by id.
 
+### M6. Rating writes only mutate the in-memory cache, not a durable store
+- **What:** `rate_song` does `song["rating"] = stars` directly on the objects in
+  the mutable-default `_cache` (`load_songs(_cache=[])`). The write lands only in
+  that in-process cache; nothing is written back to a database or file.
+- **Impact:** **updates are non-persistent** — a rating looks like it saved
+  (subsequent reads hit the same cache) but is silently lost on restart/redeploy
+  or in any second worker process that has its own cache. That's data loss, not a
+  style nit — which is why this is a Major, not the mutable-default idiom alone.
+- **Fix:** write ratings through a real store (DB, or an atomic file write),
+  keyed by `id`, and never mutate shared cached rows in place — return copies.
+- *(Compounds M5: M5 is the split/divergent stores; M6 is that the write never
+  reaches durable storage at all — together they mean ratings silently vanish.)*
+
 ---
 
 ## 🟡 Minor / robustness / nits
 
-- **N1. Mutable default arg cache** `load_songs(_cache=[])` — works by accident;
-  the shared list is mutated by `rate_song` (`song["rating"]=stars` edits cached
-  data in place). Replace with a module-level cache or dependency; never mutate
-  cached rows — return copies. *(Correctness-adjacent: the in-place mutation is
-  the real problem, the idiom is the nit.)*
-- **N2. Cold-start cache is not thread-safe** — FastAPI runs these sync handlers
+- **N1. Cold-start cache is not thread-safe** — FastAPI runs these sync handlers
   on a threadpool; concurrent first requests can double-populate `_cache`. Guard
   with a lock or load once at startup.
-- **N3. `/stats/duration` crashes on empty data** — `total / len(songs)` →
+- **N2. `/stats/duration` crashes on empty data** — `total / len(songs)` →
   `ZeroDivisionError` (500) if the dataset is empty; and `s["duration_ms"]`
   `KeyError`s if any row lacks the key. Guard both.
-- **N4. `load_songs` opens a hardcoded `"songs.json"`** — a bare relative path
+- **N3. `load_songs` opens a hardcoded `"songs.json"`** — a bare relative path
   (resolved against CWD) that **doesn't exist in this repo** (the data files are
   `songs_part1/2.json`). Any file/JSON error is unhandled → 500 on every
   endpoint. Make the path configurable and handle load errors.
-- **N5. No Pydantic request/response models** — raw scalars in, ad-hoc dicts
+- **N4. No Pydantic request/response models** — raw scalars in, ad-hoc dicts
   out; no schema, no docs fidelity. Quality issue, not a bug.
-- **N6. `/stats/duration` averages raw `duration_ms`** — if pointed at the real
-  data it would silently average the seconds-not-ms rows into the result (the
-  data bug from DECISIONS.md). Not the reviewed file's fault per se, but a
-  reviewer should flag that the stat is only as good as its inputs.
 
 ---
 

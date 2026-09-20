@@ -51,6 +51,26 @@ def test_search_no_match_is_200_empty(client):
     assert r.status_code == 200 and r.json()["count"] == 0
 
 
+def test_filter_partial_match_matches_substring(client):
+    # "21" must match BOTH "21" and "21 Guns" (substring, not exact).
+    r = client.get("/songs", params={"q": "21", "size": 25})
+    titles = [s["title"] for s in r.json()["items"]]
+    assert "21" in titles and "21 Guns" in titles
+    assert r.json()["total"] == len(titles)  # total reflects filtered set
+
+
+def test_filter_is_case_insensitive_and_sorts_within_filter(client):
+    r = client.get("/songs", params={"q": "PERFECT", "sort_by": "tempo",
+                                     "order": "asc", "size": 25})
+    assert r.json()["total"] == 2  # two "Perfect" songs
+
+
+def test_filter_no_match_returns_empty_page(client):
+    r = client.get("/songs", params={"q": "zzzzz"})
+    body = r.json()
+    assert body["total"] == 0 and body["items"] == [] and body["total_pages"] == 0
+
+
 def test_get_by_id_404(client):
     assert client.get("/songs/id/nope").status_code == 404
 
@@ -69,6 +89,20 @@ def test_rate_song_out_of_range_is_422(client):
 
 def test_rate_unknown_song_is_404(client):
     assert client.post("/songs/nope/rating", json={"stars": 3}).status_code == 404
+
+
+def test_sort_by_rating_desc_unrated_last(client):
+    items = client.get("/songs", params={"size": 25}).json()["items"]
+    client.post(f"/songs/{items[0]['id']}/rating", json={"stars": 5})
+    client.post(f"/songs/{items[1]['id']}/rating", json={"stars": 2})
+    ratings = [
+        s["rating"]
+        for s in client.get(
+            "/songs", params={"sort_by": "rating", "order": "desc", "size": 25}
+        ).json()["items"]
+    ]
+    assert ratings[0] == 5 and ratings[1] == 2  # highest first
+    assert ratings[-1] is None  # unrated sorts last, even descending
 
 
 def test_duration_stats_excludes_suspect_and_missing(client):

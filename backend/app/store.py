@@ -15,8 +15,9 @@ from typing import Any
 
 from .normalize import OUTPUT_FIELDS
 
-# Fields a client may sort by: everything except the quality annotation list.
-SORTABLE_FIELDS = tuple(f for f in OUTPUT_FIELDS if f != "data_quality")
+# Fields a client may sort by: every column in the normalized table, plus the
+# user-supplied rating (attached at response time, unrated sorts last).
+SORTABLE_FIELDS = tuple(OUTPUT_FIELDS) + ("rating",)
 
 MIN_STARS = 1
 MAX_STARS = 5
@@ -137,6 +138,21 @@ class SongRepository:
             self._with_rating(s)
             for s in self._songs
             if s["title"] and _normalize_title(s["title"]) == needle
+        ]
+
+    def filter_by_title(self, query: str) -> list[dict[str, Any]]:
+        """Case/spacing-insensitive **substring** title filter.
+
+        Powers the dashboard's search-as-filter: typing "21" matches both
+        "21" and "21 Guns". An empty/blank query returns everything.
+        """
+        needle = _normalize_title(query)
+        if not needle:
+            return self.all()
+        return [
+            self._with_rating(s)
+            for s in self._songs
+            if s["title"] and needle in _normalize_title(s["title"])
         ]
 
     # --- rate ---------------------------------------------------------
