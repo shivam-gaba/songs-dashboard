@@ -2,12 +2,13 @@
 
 A small full-stack app over a messy song catalog: a Python normalization step
 reconciles two dirty JSON exports into one clean table; a FastAPI backend serves
-it with pagination, whole-dataset sorting, substring title filtering, and
-persisted star ratings; a React dashboard consumes it with a sortable paginated
-table, search-as-filter, CSV export, star ratings, and a chart that surfaces an
-outlier in the data. The design principle throughout is **every value is
-trustworthy or dropped** — bad values become `null` (shown as `—`) rather than
-being coerced to something plausible; the reasoning lives in DECISIONS.md.
+it with pagination, whole-dataset sorting (any column, including rating),
+substring title filtering, and persisted star ratings; a React dashboard
+consumes it with a sortable paginated table, search-as-filter, CSV export,
+editable star ratings, and a songs-by-rating chart with a click-to-open drawer.
+The design principle throughout is **every value is trustworthy or dropped** —
+bad values become `null` (shown as `—`) rather than being coerced to something
+plausible; the reasoning lives in DECISIONS.md.
 
 ## Tour of the solution
 - `backend/app/normalize.py` — Section 1. Pure reconciliation logic (dedup by
@@ -56,15 +57,15 @@ Production build: `npm run build` (output in `frontend/dist/`).
 ```bash
 cd backend
 source .venv/bin/activate
-python -m pytest -q          # 52 tests: normalization rules, sort, pagination,
-                             # substring filter, lookup, rating validation &
-                             # persistence, HTTP API
+python -m pytest -q          # 53 tests: normalization rules, sort (incl. rating),
+                             # pagination, substring filter, lookup, rating
+                             # validation & persistence, HTTP API
 ```
 
 ## API quick reference
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/songs?page&size&sort_by&order&q` | sort/filter applied to the whole dataset, then paged; `q` is a case/spacing-insensitive **substring** title filter |
+| GET | `/songs?page&size&sort_by&order&q` | sort/filter applied to the whole dataset, then paged. `sort_by` = any column incl. `rating` (unrated sorts last); `q` = case/spacing-insensitive **substring** title filter; `size` capped at 100 |
 | GET | `/songs/search?title=` | exact (normalized) title lookup; returns a list (0/1/many) |
 | GET | `/songs/id/{id}` | one song by stable id |
 | POST | `/songs/{id}/rating` | body `{"stars": 1-5}`; persisted; 422 if invalid, 404 if unknown |
@@ -74,8 +75,8 @@ python -m pytest -q          # 52 tests: normalization rules, sort, pagination,
 ## Notable data findings (see DECISIONS.md for the full log)
 - 25 unique songs after reconciling on `id` (16 + 13 − 4 overlapping).
 - **Unit outlier:** 3 `duration_ms` values are actually seconds — kept exactly
-  as received (we don't alter upstream values); the chart highlights them and
-  `/stats/duration` excludes them from the average.
+  as received (we don't alter upstream values); `/stats/duration` excludes them
+  from the average so a summary stat isn't skewed.
 - Out-of-range ratios, `tempo=0`, `"N/A"`, nulls, string-typed numbers, and a
   dirty title are each handled by an explicit, documented rule (bad values are
   dropped to `null`, shown as `—`).

@@ -46,9 +46,8 @@ The AI presented each with a recommendation and trade-offs; my calls:
 3. **Duration unit outlier → keep exactly as received, do NOT convert.** ←
    *This is where I overruled the AI.* Its recommendation was to auto-detect and
    multiply by 1000. I overrode it: we can't change an upstream value no matter
-   how small it looks — converting bakes a *guess* in as fact. The chart still
-   surfaces the outliers and `/stats/duration` excludes them, but the stored
-   value is untouched.
+   how small it looks — converting bakes a *guess* in as fact. `/stats/duration`
+   excludes them from its average, but the stored value is untouched.
 4. **Non-unique titles → search returns all matches / filters the table.**
 
 ### 5. Steering it back to a *user-facing* mindset
@@ -70,16 +69,34 @@ the search filter the table in place.
   title filter, ratings by id with two-layer validation and atomic persistence.
 - **My steer:** treat tests as expected, not bonus, and point them at the
   non-trivial logic the rubric names (normalization rules, sort, pagination,
-  filter, lookup, invalid rating). Result: 52 passing tests including explicit
+  filter, lookup, invalid rating). Result: 53 passing tests including explicit
   regression guards for the two buggy-file bugs.
 - Frontend: sortable/paginated table, search-as-filter, CSV export, star
-  ratings, and a duration chart that highlights the short-duration outliers.
+  ratings, and a first-pass duration chart (later replaced — see step 8).
 
 ### 7. Code review via adversarial verification
 For Section 4 I had the AI fan out multiple independent reviewers over
 `buggy_api.py` (correctness / HTTP-contract / state / robustness / ops lenses),
 then **adversarially verify each finding** to filter out cry-wolf, then I did
 the ranking myself. See REVIEW.md, including a note on where the AI over-claimed.
+
+### 8. Second pass: running it, then iterating on the dashboard
+After seeing it live I drove a round of product-focused changes:
+- **Killed the whole `data_quality` flag system** — bad values just render `—`;
+  duration shown `MM:SS:MS`, kept as-is (no convert).
+- **Search moved above the table and filters it in place**, debounced to **1s**
+  so we don't fire an API call per keystroke; **1-based** row numbers.
+- **Replaced the duration chart with a songs-by-rating distribution** (Unrated +
+  ★1–★5). When I flagged that a tooltip can't hold 1000+ songs, the fix was to
+  **cap the tooltip at 5 and open a side drawer** with the full list on bar
+  click. Made the **Rating column sortable** (needed `rating` in the backend
+  sort allow-list; unrated sorts last).
+- **Caught a real bug I introduced:** the chart fetched `size=1000`, which the
+  API rejects (422) because `size` is capped at 100. Fixed by **paging** under
+  the cap rather than raising it (raising it would reopen the DoS hole I'd just
+  flagged in REVIEW.md).
+- Refined REVIEW.md: raised the "rating write mutates the cache but never
+  persists" finding from nit to **Major** (it's silent data loss).
 
 ---
 

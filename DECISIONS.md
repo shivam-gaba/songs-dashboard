@@ -81,10 +81,9 @@ Result: **25 unique songs**; 12/25 rows have no null fields.
 - **Why not convert?** We cannot change an upstream value no matter how small it
   looks — converting *guesses* the true value and bakes that guess in as fact.
   We surface exactly what we were given.
-- **Where the quirk still shows:** detection-by-magnitude is used only for
-  presentation, never to alter data — the dashboard chart highlights the short
-  outliers, and `/stats/duration` excludes them from the average so a summary
-  stat isn't skewed by values in the wrong unit.
+- **Where the quirk still shows:** detection-by-magnitude is used only for the
+  honest average — `/stats/duration` excludes the short outliers so a summary
+  stat isn't skewed by values in the wrong unit — never to alter the stored data.
 - **Trade-off:** the table shows a few very short durations (e.g. `00:00:158`).
   That's the honest state of the upstream data; we don't paper over it.
 
@@ -112,7 +111,7 @@ Result: **25 unique songs**; 12/25 rows have no null fields.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /songs?page&size&sort_by&order` | list, paginate, **sort across the whole dataset then slice** |
+| `GET /songs?page&size&sort_by&order&q` | list, substring-filter (`q`), **sort across the whole (filtered) set then slice**; `size` capped at 100 |
 | `GET /songs/search?title=` | title lookup — always returns a **list** of matches |
 | `GET /songs/id/{id}` | fetch one song by stable id |
 | `POST /songs/{id}/rating` `{stars:1-5}` | rate a song, persisted to disk |
@@ -124,6 +123,12 @@ Result: **25 unique songs**; 12/25 rows have no null fields.
   `sort_by` is validated against an allow-list (unknown field → 400, so a bad
   param can't KeyError into a 500). Nulls always sort **last** regardless of
   direction, so missing values never masquerade as the min/max.
+- **Sortable by any column, including `rating`** — the user-supplied rating is
+  attached at response time and added to the sort allow-list; **unrated songs
+  sort last** in both directions (same nulls-last rule).
+- **`size` is capped at 100** (a DoS guard). The dashboard's chart, which needs
+  every song, pages under that cap rather than asking for an unbounded `size` —
+  a request like `size=1000` is rejected with 422 by design.
 - **Trade-off:** re-sorting the whole set per request is O(n log n) every call.
   Fine for 25 rows; for a large table I'd sort in the DB with an index (noted in
   REFLECTION).
@@ -144,8 +149,20 @@ Result: **25 unique songs**; 12/25 rows have no null fields.
 - Duration is shown as **`MM:SS:MS`** (e.g. `03:45:947`) rather than raw ms.
 - **No data-quality flags column** in the UI — dropped/missing values simply
   render as `—`. Durations are shown exactly as received (a short one reads as
-  e.g. `00:00:158`); the *chart* highlights those outliers by magnitude, but the
-  table never editorializes.
+  e.g. `00:00:158`); `/stats/duration` excludes those outliers from its average,
+  but the table itself never editorializes.
+
+### Chart choice: songs-by-rating distribution (Section 3.7)
+- The dashboard chart is a **distribution of songs across rating classes**
+  (Unrated + ★1–★5). It's the honest, user-relevant view for this app — it shows
+  how the catalog is being rated and updates live as the user rates.
+- **Scalability built in:** the hover tooltip previews at most 5 songs, and
+  **clicking a bar opens a side drawer** with the full, scrollable list for that
+  class — so the chart never tries to render 1000+ songs in a tooltip. For a very
+  large catalog the drawer would page that list from the API (a `rating=` filter)
+  rather than the in-memory set; noted as future work.
+- *(An earlier version charted duration to expose the seconds-not-ms outliers;
+  replaced because a rating breakdown is more useful to an actual listener.)*
 
 ### Non-unique titles → search returns all matches; table filters in place
 - The dashboard search box **filters the table** to every match (0, 1, or many),
@@ -178,7 +195,7 @@ Result: **25 unique songs**; 12/25 rows have no null fields.
 - **Fuzzy title search.** Substring + case/spacing-insensitive, but not
   spelling-tolerant. Would add trigram/`ILIKE` matching with ranked results.
 - **Auth / rate-limiting / per-user ratings.** Ratings are global and anonymous.
-- **Frontend tests.** Backend has 52 tests; the React app is manually verified.
+- **Frontend tests.** Backend has 53 tests; the React app is manually verified.
   Given the time budget I put test effort where the graded "non-trivial logic"
   lives (normalization, sort, pagination, lookup, rating).
 - **Pinning exact upstream provenance** (which file each surviving value came
